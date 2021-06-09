@@ -1,0 +1,25 @@
+{
+  "name": "talio",
+  "version": "1.0.0",
+  "description": "Talio Client",
+  "main": "talio.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "Talio",
+    "Websocket",
+    "Client"
+  ],
+  "author": "EVOKE",
+  "license": "ISC",
+  "dependencies": {
+    "limiter": "^2.1.0",
+    "murmurhash": "^2.0.0",
+    "phoenix": "^1.5.8"
+  },
+  "devDependencies": {
+    "laravel-mix": "^6.0.18",
+    "postcss": "^8.2.13"
+  }
+}
