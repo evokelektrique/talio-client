@@ -22,6 +22,14 @@ let Talio = {
     },
   },
 
+  // Current Website Information
+  website: {
+    // Responsiveness status of current website
+    // Default to `true` because in database it
+    // is set to `true` as well.
+    is_responsive: true
+  },
+
   // Device Information
   device: {
     // View Ports
@@ -78,6 +86,10 @@ let Talio = {
       width: window.screen.width,
       height: window.screen.height
     },
+    // Touch screen settings
+    touch: {
+      offset: null
+    },
     humanized_target: function() {
       if(this.target !== null) {
         return this.types[this.target]
@@ -88,6 +100,14 @@ let Talio = {
   },
 
   init() {
+    // Setup touch screen settings
+    const view_port = this.device.view_ports.current(this)
+    if(view_port.target === "mobile" || view_port.target === "tablet") {
+      this.device.touch.offset = view_port.width - window.innerWidth
+      this.device.touch.offsetLeft = this.device.touch.offset / 2
+      this.device.touch.offsetRight = window.innerWidth - this.device.touch.offset / 2
+    }
+
     // Setup Current User Device Info
     this.device.target = this.device_detector()
 
@@ -97,13 +117,13 @@ let Talio = {
       this.enable_debug(this.device.view_ports.current(this))
     }
 
-    // Rate Limit Config
-    const rate_limit_tokens   = 10
-    const rate_limit_interval = 10000
-    const limiter = new RateLimiter({ 
-      tokensPerInterval: rate_limit_tokens, 
-      interval: rate_limit_interval 
-    });
+    // // Rate Limit Config
+    // const rate_limit_tokens   = 10
+    // const rate_limit_interval = 10000
+    // const limiter = new RateLimiter({ 
+    //   tokensPerInterval: rate_limit_tokens, 
+    //   interval: rate_limit_interval 
+    // });
 
     // Current Website Information
     const website = {
@@ -127,39 +147,42 @@ let Talio = {
     // Connect to Talio WebSocket Endpoint
     const socket = this.connect(params)
 
-    const branch_channel = this.establish_branch_channel(socket)
-
+    // Define Current Branch And Send Branch to Server
+    const { fingerprint } = this.generate_branch()
+    this.page.branch.fingerprint = fingerprint
+    console.log('Branch:', fingerprint)
+    const branch_channel = this.establish_branch_channel(socket, fingerprint)
 
     // Connect to Pre-Defined Channels
     const click_channel = this.establish_click_channel(socket)
 
-    // // const refresh_nonce = this.refresh_nonce(click_channel)
-
-
-    // // Define Current Branch And Send Branch to Server
-    const { fingerprint } = this.generate_branch()
-    this.page.branch.fingerprint = fingerprint
+    // // // const refresh_nonce = this.refresh_nonce(click_channel)
 
     // Capture Clicks And Send Them Through WebSocket
     document.addEventListener("click", async e => {
       // const remainingMessages = await limiter.removeTokens(1);
-      // console.log(remainingMessages)
+      // console.log("Remained clicks:", remainingMessages)
+      // // Limit the clicks
       // if(remainingMessages > 0) {
-        if(this.branch_status) {
+        // if(this.branch_status) {
           this.capture_click(e, click_channel)
-        }
+        // }
       // }
     })
 
   },
 
-  establish_branch_channel(socket) {
-    const { fingerprint } = this.generate_branch()
+  establish_branch_channel(socket, fingerprint) {
     let branch_channel = socket.channel("branch:" + fingerprint, {})
 
     // 
     // Channel Hooks
     // 
+
+    branch_channel.on("initialize_website", response => {
+      console.log(response)
+      this.website.is_responsive = response.is_responsive
+    })
 
     // Define Talio User ID Hook
     branch_channel.on("initialize_user", response => {
@@ -181,7 +204,7 @@ let Talio = {
 
     // Default Hooks
     branch_channel.join()
-      .receive("ok", ({messages}) => console.log("catching up", messages) )
+      // .receive("ok", ({messages}) => console.log("catching up", messages) )
       .receive("error", ({reason}) => console.log("failed join", reason) )
       .receive("timeout", () => console.log("Networking issue. Still waiting..."))
 
@@ -207,11 +230,11 @@ let Talio = {
   // ID | x_cordinate | y_cordinate | element_width | element_height | element_x_cordinate | element_y_cordinate | path(index) | branch_id(index) | device_target(index) | tag_name(index) | talio_user_id(index) | insreted_at | updated_at
 
   capture_click(event, click_channel) {
-    const element_boundings = event.target.getBoundingClientRect()
     console.log(event)
+    const element_boundings = event.target.getBoundingClientRect()
     const raw_payload = {
       metadata: {
-        // // Current User Nonce
+        // // Current User Nonce (Currently we don't need it)
         // nonce: window.talio.userInfo.nonce,
 
         // Device Type
@@ -222,23 +245,26 @@ let Talio = {
         fingerprint: this.page.branch.fingerprint
       },
 
+      // We use `page(X/Y)` instead of `client(X/Y)`
+      // because `clientY` does not calculate page scroll
       click: {
         // Client Mouse Click In X Axis
-        x: event.clientX,
+        x: event.pageX,
         // Client Mouse Click In Y Axis
-        y: event.clientY,
+        y: event.pageY,
       },
 
+      // We only need the path of current element
       element: {
-        height:   element_boundings.height,
-        width:    element_boundings.width,
-        x:        element_boundings.x,
-        y:        element_boundings.y,
-        top:      element_boundings.top,
-        bottom:   element_boundings.bottom,
-        right:    element_boundings.right,
-        left:     element_boundings.left,
-        tag_name: event.target.tagName,
+      //   height:   element_boundings.height,
+      //   width:    element_boundings.width,
+      //   x:        element_boundings.x,
+      //   y:        element_boundings.y,
+      //   top:      element_boundings.top,
+      //   bottom:   element_boundings.bottom,
+      //   right:    element_boundings.right,
+      //   left:     element_boundings.left,
+      //   tag_name: event.target.tagName,
         path:     this.css_path(event.target), 
       },
     }
@@ -249,25 +275,28 @@ let Talio = {
 
   // Send Payload(Click) To Server
   push_click(target, raw_payload, click_channel) {
-    // if(this.terminated) {
-    //   return;
-    // }
+    // Do not push the clicks when socket is terminated
+    if(this.terminated) {
+      return;
+    }
     const payload = this.adjust_payload(target, raw_payload)
-    console.log(payload)
+    console.log("Payload:", payload)
+    // Send the click payload to the socket server
     click_channel.push("store_click", payload, 10000)
       .receive("ok", response => {
         console.log("Store Click: ", response)
       })
   },
 
+  // TODO: No need it, because it will cause problems
   enable_debug(view_port) {
     const view_port_border = document.createElement("div")
     const top              = 0
     const right            = this.device.screen.width - view_port.width 
 
     view_port_border.style.outline   = "1px solid red"
-    view_port_border.style.position = "absolute"
-    view_port_border.style.zIndex = "-1"
+    view_port_border.style.position = "fixed"
+    view_port_border.style.zIndex = "9999"
     view_port_border.style.width    = view_port.width + "px"
     view_port_border.style.height    = "100%"
 
@@ -281,13 +310,34 @@ let Talio = {
     document.body.appendChild(view_port_border)
   },
 
+  // Get padding and margin of an element
+  compute_spaces(element) {
+    const computed_style = window.getComputedStyle(element, null)
+    const styles = {}
+
+    // Paddings
+    styles.padding_right  = parseFloat(computed_style.paddingRight)
+    styles.padding_left   = parseFloat(computed_style.paddingLeft)
+    styles.padding_top    = parseFloat(computed_style.paddingTop)
+    styles.padding_bottom = parseFloat(computed_style.paddingBottom)
+
+    // Margins
+    styles.margin_right  = parseFloat(computed_style.marginRight)
+    styles.margin_left   = parseFloat(computed_style.marginLeft)
+    styles.margin_top    = parseFloat(computed_style.marginTop)
+    styles.margin_bottom = parseFloat(computed_style.marginBottom)
+
+    return styles
+  },
+
   adjust_payload(target, raw_payload) {
+    console.log("RAW click", raw_payload.click)
     const payload = raw_payload
-    const element = payload.element
-    const new_element = {}
     const view_port = this.device.view_ports.current(this)
     const pre_defined_width = view_port.width
-
+    const element_spaces = this.compute_spaces(target)
+    console.log(element_spaces)
+    
     payload.metadata.device = view_port.device
 
     let adjusted_x
@@ -296,41 +346,66 @@ let Talio = {
     let right = 0;
 
     // Right Offset Only For Desktop And Higher Devices
-    if(view_port.target === "desktop") {
-      right = Math.max(0, this.device.screen.width - view_port.width)
+    // Or if the website is responsive
+    if(view_port.target === "desktop" && this.website.is_responsive) {
+      right = Math.max(0, this.device.screen.width - pre_defined_width)
     }
-    
+
     // Range of Resizing
-    const ranges = { 
+    const ranges = {
       x1: right/2, 
       x2: pre_defined_width 
     }
 
     // Resize Outer Range Clicks
-    if(raw_payload.click.x > ranges.x2 || raw_payload.click.x < ranges.x1) {
+    if(raw_payload.click.x < ranges.x1) {
+      adjusted_x = raw_payload.click.x + right / 2
+      // adjusted_x = pre_defined_width - adjusted_x
+
+      console.log("adjusted 1", pre_defined_width, adjusted_x, raw_payload.click.x)
+      // Change Raw Payload Click in X axis
+      payload.click.x = adjusted_x
+      
+    }
+    if(raw_payload.click.x > ranges.x2) {
       adjusted_x = raw_payload.click.x - pre_defined_width
       adjusted_x = pre_defined_width - adjusted_x
+      adjusted_x = adjusted_x + right / 2
 
+      console.log("adjusted 2", pre_defined_width, adjusted_x, raw_payload.click.x)
       // Change Raw Payload Click in X axis
       payload.click.x = adjusted_x
     }
 
-    const temp_element_styles = window.getComputedStyle(target)
-    const margin_right = parseFloat(temp_element_styles["marginRight"])
-    const margin_left = parseFloat(temp_element_styles["marginLeft"])
+    payload.click.x = payload.click.x - right/2
 
-    element.width = (element.width - (window.innerWidth - pre_defined_width))
-    element.right = element.right - margin_right
-    element.left = (element.left + right/2) - margin_left
+    // // Adjust touch screen axis
+    if(view_port.target === "mobile" || view_port.target === "tablet") {
+      payload.click.x  = Math.floor(this.device.view_ports.tablet.width * payload.click.x / window.innerWidth)
+
+      if(payload.click.x > this.device.touch.offsetLeft) {
+        console.log("click inner range 1");
+      } else {
+        console.log("outer range 1")
+      }
+      if(payload.click.x < this.device.touch.offsetRight) {
+        console.log("click inner range 1");
+      } else {
+        console.log("outer range 2")
+      }
+
+    //   // let mobile_adjusted_x = (this.device.view_ports.tablet.width - payload.click.x) / 2
+    //   payload.click.x += this.device.touch.offset
+    }
+
+    // const padding_x = (element_spaces.padding_right + element_spaces.padding_left)
+    // const margin_x = (element_spaces.margin_right + element_spaces.margin_left)
+    // console.log(padding_x, payload.click.x)
+    // payload.click.x = payload.click.x + padding_x + margin_x
+    console.log(payload.click)
 
     return payload
   },
-
-
-
-
-
-
 
 
 
@@ -351,8 +426,8 @@ let Talio = {
 
       // // Gracefully shut down the socket
       // if(message.type === "close") {
-      //   socket.disconnect(() => {
-          console.log("Talio:", "Socket connection dropped")
+        console.log("Talio:", "Socket connection dropped")
+        socket.disconnect()
       //   }, 1000)
       // }
     })
@@ -453,51 +528,4 @@ let Talio = {
   }
 }
 
-Talio.init()
-
-
-
-// var a = "html > body > p"
-// var b = "html > body > p > span"
-// var c = "html > body"
-
-// var entries = [a, a, b, b, b, c]
-// // entries.forEach(entry => {
-// //   console.log(entry.split(" > "))
-// // })
-
-// var counts = {};
-// entries.forEach(x => { 
-//   counts[x] = (counts[x] || 0)+1; 
-// });
-
-// for( var key in counts) {
-//   console.log("key", key, "value", counts[key])
-//   const element_init_style = {
-//     border: "1px solid red",
-//     background: "cyan"
-//   }
-//   const element_hover_style = {
-//     color: "white",
-//     background: "black"
-//   }
-//   var element = document.querySelector(key)
-//   if(element) {
-//     Object.assign(element.style, element_init_style)
-//     element.addEventListener('mouseover', event => {
-//       const element_css_path = Talio.css_path(event.target)
-//       const element_click_counts = counts[element_css_path]
-//       // Log
-//       console.log("\"" + element_css_path + "\" has " + element_click_counts + " clicks")
-//     })
-
-//     // Styles
-//     element.addEventListener('mouseover', event => {
-//       Object.assign(event.target.style, element_hover_style)
-//     })
-//     element.addEventListener('mouseout', event => {
-//       Object.assign(event.target.style, element_init_style)
-//     })
-
-//   }
-// }
+window.talio.instance = Talio
