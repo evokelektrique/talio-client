@@ -3,6 +3,9 @@ import { RateLimiter } from "limiter";
 
 const murmurhash = require('murmurhash')
 
+// Define talio object
+window.talio = {}
+
 let Talio = {
   nonce: null,
   branch_status: false,
@@ -36,26 +39,21 @@ let Talio = {
     view_ports: {
       // Return Current View Port
       current: function(__MODULE__) {
-        const view_port = {
-          //// View Port Based on Device User Agent
-          // user_agent: __MODULE__.device.view_ports[__MODULE__.device.humanized_target().toLowerCase()],
-
-          // Based on Calculated Device Screen
-          target: null,
-        }
+        const view_port = {}
+        
         // Based On Responsiveness of Device Screen
-        if(window.innerWidth >= __MODULE__.device.view_ports.desktop.width) {
+        if(document.body.clientWidth >= __MODULE__.device.view_ports.desktop.width) {
           view_port.target = "desktop"
           view_port.device = 0
           view_port.width = __MODULE__.device.view_ports.desktop.width
         }
-        if(window.innerWidth <= __MODULE__.device.view_ports.tablet.width ||
-          window.innerWidth <= __MODULE__.device.view_ports.desktop.width) {
+        if(document.body.clientWidth <= __MODULE__.device.view_ports.tablet.width ||
+          document.body.clientWidth <= __MODULE__.device.view_ports.desktop.width) {
           view_port.target = "tablet"
           view_port.device = 1
           view_port.width = __MODULE__.device.view_ports.tablet.width
         }
-        if(window.innerWidth <= __MODULE__.device.view_ports.mobile.width) {
+        if(document.body.clientWidth <= __MODULE__.device.view_ports.mobile.width) {
           view_port.target = "mobile"
           view_port.device = 2
           view_port.width = __MODULE__.device.view_ports.mobile.width
@@ -75,7 +73,6 @@ let Talio = {
         width: 380,
       }
     },
-
     target: null,
     types: {
       0: "Desktop", 
@@ -86,10 +83,10 @@ let Talio = {
       width: window.screen.width,
       height: window.screen.height
     },
-    // Touch screen settings
-    touch: {
-      offset: null
-    },
+    // // Touch screen settings (Don't need it)
+    // touch: {
+    //   offset: null
+    // },
     humanized_target: function() {
       if(this.target !== null) {
         return this.types[this.target]
@@ -102,11 +99,6 @@ let Talio = {
   init() {
     // Setup touch screen settings
     const view_port = this.device.view_ports.current(this)
-    if(view_port.target === "mobile" || view_port.target === "tablet") {
-      this.device.touch.offset = view_port.width - window.innerWidth
-      this.device.touch.offsetLeft = this.device.touch.offset / 2
-      this.device.touch.offsetRight = window.innerWidth - this.device.touch.offset / 2
-    }
 
     // Setup Current User Device Info
     this.device.target = this.device_detector()
@@ -169,7 +161,6 @@ let Talio = {
         // }
       // }
     })
-
   },
 
   establish_branch_channel(socket, fingerprint) {
@@ -211,7 +202,6 @@ let Talio = {
     return branch_channel
   },
 
-
   refresh_nonce(branch_channel) {
     setInterval(
       branch_channel.push("refresh_nonce", {}, 10000)
@@ -220,14 +210,6 @@ let Talio = {
         })
       , 1000)
   },
-
-
-
-
-
-  // Clicks Columns:
-  // 
-  // ID | x_cordinate | y_cordinate | element_width | element_height | element_x_cordinate | element_y_cordinate | path(index) | branch_id(index) | device_target(index) | tag_name(index) | talio_user_id(index) | insreted_at | updated_at
 
   capture_click(event, click_channel) {
     console.log(event)
@@ -256,15 +238,6 @@ let Talio = {
 
       // We only need the path of current element
       element: {
-      //   height:   element_boundings.height,
-      //   width:    element_boundings.width,
-      //   x:        element_boundings.x,
-      //   y:        element_boundings.y,
-      //   top:      element_boundings.top,
-      //   bottom:   element_boundings.bottom,
-      //   right:    element_boundings.right,
-      //   left:     element_boundings.left,
-      //   tag_name: event.target.tagName,
         path:     this.css_path(event.target), 
       },
     }
@@ -288,55 +261,54 @@ let Talio = {
       })
   },
 
-  // TODO: No need it, because it will cause problems
-  enable_debug(view_port) {
-    const view_port_border = document.createElement("div")
-    const top              = 0
-    const right            = this.device.screen.width - view_port.width 
+  // // TODO: No need it, because it will cause problems
+  // enable_debug(view_port) {
+  //   const view_port_border = document.createElement("div")
+  //   const top              = 0
+  //   const right            = this.device.screen.width - view_port.width 
 
-    view_port_border.style.outline   = "1px solid red"
-    view_port_border.style.position = "fixed"
-    view_port_border.style.zIndex = "9999"
-    view_port_border.style.width    = view_port.width + "px"
-    view_port_border.style.height    = "100%"
+  //   view_port_border.style.outline   = "1px solid red"
+  //   view_port_border.style.position = "fixed"
+  //   view_port_border.style.zIndex = "9999"
+  //   view_port_border.style.width    = view_port.width + "px"
+  //   view_port_border.style.height    = "100%"
 
-    if(view_port.target === "desktop") {
-      view_port_border.style.right    = right/2 + "px"
-      view_port_border.style.left    = right/2 + "px"
-    }
-    view_port_border.style.top      = top + "px"
+  //   if(view_port.target === "desktop") {
+  //     view_port_border.style.right    = right/2 + "px"
+  //     view_port_border.style.left    = right/2 + "px"
+  //   }
+  //   view_port_border.style.top      = top + "px"
 
-    // TODO: REMOVE
-    document.body.appendChild(view_port_border)
-  },
+  //   // TODO: REMOVE
+  //   document.body.appendChild(view_port_border)
+  // },
 
-  // Get padding and margin of an element
-  compute_spaces(element) {
-    const computed_style = window.getComputedStyle(element, null)
-    const styles = {}
+  // // Get padding and margin of an element (Don't need it rn)
+  // compute_spaces(element) {
+  //   const computed_style = window.getComputedStyle(element, null)
+  //   const styles = {}
 
-    // Paddings
-    styles.padding_right  = parseFloat(computed_style.paddingRight)
-    styles.padding_left   = parseFloat(computed_style.paddingLeft)
-    styles.padding_top    = parseFloat(computed_style.paddingTop)
-    styles.padding_bottom = parseFloat(computed_style.paddingBottom)
+  //   // Paddings
+  //   styles.padding_right  = parseFloat(computed_style.paddingRight)
+  //   styles.padding_left   = parseFloat(computed_style.paddingLeft)
+  //   styles.padding_top    = parseFloat(computed_style.paddingTop)
+  //   styles.padding_bottom = parseFloat(computed_style.paddingBottom)
 
-    // Margins
-    styles.margin_right  = parseFloat(computed_style.marginRight)
-    styles.margin_left   = parseFloat(computed_style.marginLeft)
-    styles.margin_top    = parseFloat(computed_style.marginTop)
-    styles.margin_bottom = parseFloat(computed_style.marginBottom)
+  //   // Margins
+  //   styles.margin_right  = parseFloat(computed_style.marginRight)
+  //   styles.margin_left   = parseFloat(computed_style.marginLeft)
+  //   styles.margin_top    = parseFloat(computed_style.marginTop)
+  //   styles.margin_bottom = parseFloat(computed_style.marginBottom)
 
-    return styles
-  },
+  //   return styles
+  // },
 
   adjust_payload(target, raw_payload) {
     console.log("RAW click", raw_payload.click)
     const payload = raw_payload
     const view_port = this.device.view_ports.current(this)
     const pre_defined_width = view_port.width
-    const element_spaces = this.compute_spaces(target)
-    console.log(element_spaces)
+    // const element_spaces = this.compute_spaces(target)
     
     payload.metadata.device = view_port.device
 
@@ -357,58 +329,39 @@ let Talio = {
       x2: pre_defined_width 
     }
 
-    // Resize Outer Range Clicks
-    if(raw_payload.click.x < ranges.x1) {
-      adjusted_x = raw_payload.click.x + right / 2
-      // adjusted_x = pre_defined_width - adjusted_x
+    // Adjust Desktop screen axis
+    if(view_port.target === "desktop") {
+      if(raw_payload.click.x < ranges.x1) {
+        // Resize Outer Range Clicks (Left side)
+        adjusted_x = raw_payload.click.x + right / 2
 
-      console.log("adjusted 1", pre_defined_width, adjusted_x, raw_payload.click.x)
-      // Change Raw Payload Click in X axis
-      payload.click.x = adjusted_x
-      
-    }
-    if(raw_payload.click.x > ranges.x2) {
-      adjusted_x = raw_payload.click.x - pre_defined_width
-      adjusted_x = pre_defined_width - adjusted_x
-      adjusted_x = adjusted_x + right / 2
+        // Change Raw Payload Click in X axis
+        payload.click.x = adjusted_x
+        payload.click.x = payload.click.x - right/2
+      } else if(raw_payload.click.x > ranges.x2) {
+        // Resize Outer Range Clicks (Right side)
+        adjusted_x = raw_payload.click.x - pre_defined_width
+        adjusted_x = pre_defined_width - adjusted_x
+        adjusted_x = adjusted_x + right / 2
 
-      console.log("adjusted 2", pre_defined_width, adjusted_x, raw_payload.click.x)
-      // Change Raw Payload Click in X axis
-      payload.click.x = adjusted_x
-    }
-
-    payload.click.x = payload.click.x - right/2
-
-    // // Adjust touch screen axis
-    if(view_port.target === "mobile" || view_port.target === "tablet") {
-      payload.click.x  = Math.floor(this.device.view_ports.tablet.width * payload.click.x / window.innerWidth)
-
-      if(payload.click.x > this.device.touch.offsetLeft) {
-        console.log("click inner range 1");
+        // Change Raw Payload Click in X axis
+        payload.click.x = adjusted_x
+        payload.click.x = payload.click.x - right/2
       } else {
-        console.log("outer range 1")
+        payload.click.x  = Math.floor(this.device.view_ports.desktop.width * payload.click.x / document.body.clientWidth)
       }
-      if(payload.click.x < this.device.touch.offsetRight) {
-        console.log("click inner range 1");
-      } else {
-        console.log("outer range 2")
-      }
-
-    //   // let mobile_adjusted_x = (this.device.view_ports.tablet.width - payload.click.x) / 2
-    //   payload.click.x += this.device.touch.offset
+    }
+    // Adjust touch(Tablet / Mobile) screen axis (Big brain math formula)
+    if(view_port.target === "tablet") {
+      payload.click.x  = Math.floor(this.device.view_ports.tablet.width * payload.click.x / document.body.clientWidth)
+    }
+    if(view_port.target === "mobile") {
+      payload.click.x  = Math.floor(this.device.view_ports.mobile.width * payload.click.x / document.body.clientWidth)
     }
 
-    // const padding_x = (element_spaces.padding_right + element_spaces.padding_left)
-    // const margin_x = (element_spaces.margin_right + element_spaces.margin_left)
-    // console.log(padding_x, payload.click.x)
-    // payload.click.x = payload.click.x + padding_x + margin_x
     console.log(payload.click)
-
     return payload
   },
-
-
-
 
   // Create a Socket Object
   connect(params = {params: {}}) {
@@ -474,7 +427,8 @@ let Talio = {
     const tags = [
       "script", // Reason: Browser Add-ons
       "style",  // Reason: Browser Add-ons
-      "meta"    // Reason: Browser Add-ons
+      "meta",   // Reason: Browser Add-ons
+      "link"    // Reason: Unintentional styles
     ]
     tags.forEach(tag => {
       Array.from(html_document.querySelectorAll(tag)).forEach(script => {

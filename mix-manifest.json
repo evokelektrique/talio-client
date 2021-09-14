@@ -1,3 +1,4 @@
 {
-    "/dist/talio.js": "/dist/talio.js"
+    "/dist/index.js": "/dist/index.js",
+    "/talio_static/talio.js": "/talio_static/talio.js"
 }
